@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Renewable Energy Monitoring Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Orbitron:wght@500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  </head>
+  <body>
+    <div class="workspace">
+      <div class="window-frame">
+        <div class="window-bar">
+          <div class="window-dots">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="window-url">renewable-monitor.local/dashboard</div>
+        </div>
+
+        <div class="app-shell">
+          <aside class="sidebar">
+            <div class="brand">
+              <div class="brand-icon">R</div>
+              <div>
+                <strong>RenewGrid</strong>
+                <span>Energy Dashboard</span>
+              </div>
+            </div>
+
+            <nav class="nav-section">
+              <p class="nav-title">Overview</p>
+              <a class="nav-link active" href="#">Dashboard</a>
+              <a class="nav-link" href="#">Energy Flow</a>
+              <a class="nav-link" href="#">Analytics</a>
+            </nav>
+
+            <nav class="nav-section">
+              <p class="nav-title">Monitoring</p>
+              <a class="nav-link" href="#">Sensors</a>
+              <a class="nav-link" href="#">Alerts</a>
+              <a class="nav-link" href="#">History</a>
+            </nav>
+
+            <nav class="nav-section">
+              <p class="nav-title">System</p>
+              <a class="nav-link" href="#">Devices</a>
+              <a class="nav-link" href="#">Reports</a>
+              <a class="nav-link" href="#">Settings</a>
+            </nav>
+
+            <div class="sidebar-footer">
+              <div class="operator-avatar">AS</div>
+              <div>
+                <strong>Admin Station</strong>
+                <span>Plant Supervisor</span>
+              </div>
+            </div>
+          </aside>
+
+          <main class="main-panel">
+            <header class="topbar">
+              <div class="search-shell">
+                <input type="text" placeholder="Search sensors, alerts, reports..." />
+                <span class="search-key">/</span>
+              </div>
+              <div class="topbar-actions">
+                <button class="action-button primary-action">New Report</button>
+                <button class="icon-button" type="button">?</button>
+                <button class="icon-button" type="button">!</button>
+                <div id="systemStatusBadge" class="status-pill status-offline">Offline</div>
+              </div>
+            </header>
+
+            <section class="page-intro">
+              <div>
+                <p class="eyebrow">Renewable Energy Monitoring</p>
+                <h1>Dashboard</h1>
+                <p class="hero-copy">
+                  Welcome back. Here is your live renewable energy system overview.
+                </p>
+              </div>
+              <div class="sync-card">
+                <span class="status-label">Last Sync</span>
+                <strong id="lastUpdated">Waiting for data...</strong>
+              </div>
+            </section>
+
+            <section id="alertBanner" class="alert-banner hidden"></section>
+
+            <section class="metrics-grid">
+              <article class="metric-card">
+                <div class="metric-head">
+                  <span class="metric-title">Voltage</span>
+                  <span class="metric-icon metric-icon-blue">V</span>
+                </div>
+                <strong id="voltageValue" class="metric-value">0.0 V</strong>
+                <span class="metric-subtext">Line voltage across the inverter bus</span>
+              </article>
+
+              <article class="metric-card">
+                <div class="metric-head">
+                  <span class="metric-title">Current</span>
+                  <span class="metric-icon metric-icon-green">A</span>
+                </div>
+                <strong id="currentValue" class="metric-value">0.0 A</strong>
+                <span class="metric-subtext">Live current drawn by the load</span>
+              </article>
+
+              <article class="metric-card">
+                <div class="metric-head">
+                  <span class="metric-title">Power</span>
+                  <span class="metric-icon metric-icon-gold">W</span>
+                </div>
+                <strong id="powerValue" class="metric-value">0.0 W</strong>
+                <span class="metric-subtext">Real-time output power generated</span>
+              </article>
+
+              <article class="metric-card">
+                <div class="metric-head">
+                  <span class="metric-title">Temperature</span>
+                  <span class="metric-icon metric-icon-red">C</span>
+                </div>
+                <strong id="temperatureValue" class="metric-value">0.0 C</strong>
+                <span class="metric-subtext">Controller and ambient thermal reading</span>
+              </article>
+            </section>
+
+            <section class="content-grid">
+              <div class="content-main">
+                <article class="panel panel-large">
+                  <div class="card-heading">
+                    <div>
+                      <h2>System Performance</h2>
+                      <p>Real-time trend of electrical outputs from the ESP32 feed</p>
+                    </div>
+                    <div class="segment-switch">
+                      <span class="segment active">Live</span>
+                      <span class="segment">1H</span>
+                      <span class="segment">24H</span>
+                    </div>
+                  </div>
+                  <div class="hero-chart-grid">
+                    <canvas id="powerChart"></canvas>
+                    <canvas id="voltageChart"></canvas>
+                  </div>
+                </article>
+
+                <div class="secondary-chart-grid">
+                  <article class="panel">
+                    <div class="card-heading">
+                      <div>
+                        <h2>Current vs Time</h2>
+                        <p>Load current behavior across recent samples</p>
+                      </div>
+                    </div>
+                    <canvas id="currentChart"></canvas>
+                  </article>
+
+                  <article class="panel">
+                    <div class="card-heading">
+                      <div>
+                        <h2>Temperature vs Time</h2>
+                        <p>Thermal changes from the monitoring node</p>
+                      </div>
+                    </div>
+                    <canvas id="temperatureChart"></canvas>
+                  </article>
+                </div>
+
+                <article class="panel table-panel">
+                  <div class="card-heading">
+                    <div>
+                      <h2>Last 20 Records</h2>
+                      <p>Most recent readings captured from the IoT system</p>
+                    </div>
+                  </div>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Time</th>
+                          <th>Voltage</th>
+                          <th>Current</th>
+                          <th>Power</th>
+                          <th>Temperature</th>
+                        </tr>
+                      </thead>
+                      <tbody id="historyTableBody">
+                        <tr>
+                          <td colspan="5" class="empty-state">No records available yet.</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </article>
+              </div>
+
+              <aside class="content-side">
+                <article class="panel analytics-stack">
+                  <div class="card-heading">
+                    <div>
+                      <h2>Energy Analytics</h2>
+                      <p>Daily and monthly generation insights</p>
+                    </div>
+                  </div>
+                  <div class="analytics-list">
+                    <div class="analytics-item">
+                      <span>Total Energy Today</span>
+                      <strong id="energyTodayValue" class="analytics-value">0.00 Wh</strong>
+                    </div>
+                    <div class="analytics-item">
+                      <span>Monthly Energy</span>
+                      <strong id="energyMonthValue" class="analytics-value">0.00 kWh</strong>
+                    </div>
+                    <div class="analytics-item">
+                      <span>System Efficiency</span>
+                      <strong id="efficiencyValue" class="analytics-value">--</strong>
+                    </div>
+                    <div class="analytics-item">
+                      <span>System Status</span>
+                      <strong id="systemStatusValue" class="analytics-value">Offline</strong>
+                    </div>
+                  </div>
+                </article>
+
+                <article class="panel insight-panel">
+                  <div class="card-heading">
+                    <div>
+                      <h2>Operational Notes</h2>
+                      <p>Quick overview of the system health state</p>
+                    </div>
+                  </div>
+                  <ul class="insight-list">
+                    <li>Power generation updates every few seconds.</li>
+                    <li>Alerts are triggered by threshold violations.</li>
+                    <li>History table keeps the latest twenty records visible.</li>
+                  </ul>
+                </article>
+              </aside>
+            </section>
+          </main>
+        </div>
+      </div>
+    </div>
+
+    <script src="./dashboard.js"></script>
+  </body>
+</html>
