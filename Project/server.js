@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const express = require("express");
 const mongoose = require("mongoose");
 const path = require("path");
@@ -7,16 +8,30 @@ const PORT = process.env.PORT || 3000;
 const MONGODB_URI =
   process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/renewable_monitor";
 
-const VOLTAGE_LOW_THRESHOLD = Number(process.env.VOLTAGE_LOW_THRESHOLD || 210);
-const CURRENT_HIGH_THRESHOLD = Number(process.env.CURRENT_HIGH_THRESHOLD || 15);
-const TEMPERATURE_HIGH_THRESHOLD = Number(
-  process.env.TEMPERATURE_HIGH_THRESHOLD || 60
+const AUTH_USERNAME = process.env.DASHBOARD_USERNAME || "admin";
+const AUTH_PASSWORD = process.env.DASHBOARD_PASSWORD || "admin123";
+const DEFAULT_REFRESH_INTERVAL_MS = Number(
+  process.env.REFRESH_INTERVAL_MS || 4000
 );
-const ONLINE_WINDOW_SECONDS = Number(process.env.ONLINE_WINDOW_SECONDS || 15);
 const USE_MOCK_DATA = process.env.USE_MOCK_DATA === "true";
+
+const dashboardSettings = {
+  siteName: process.env.SITE_NAME || "RenewGrid",
+  operatorName: process.env.OPERATOR_NAME || "Admin Station",
+  operatorRole: process.env.OPERATOR_ROLE || "Plant Supervisor",
+  voltageLowThreshold: Number(process.env.VOLTAGE_LOW_THRESHOLD || 210),
+  currentHighThreshold: Number(process.env.CURRENT_HIGH_THRESHOLD || 15),
+  temperatureHighThreshold: Number(
+    process.env.TEMPERATURE_HIGH_THRESHOLD || 60
+  ),
+  onlineWindowSeconds: Number(process.env.ONLINE_WINDOW_SECONDS || 15),
+  refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+  alertsEnabled: true
+};
 
 let useMockMode = USE_MOCK_DATA;
 let mockReadings = [];
+const sessions = new Map();
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
@@ -95,19 +110,19 @@ function calculateEnergyWh(records) {
 function buildAlerts(reading) {
   const alerts = [];
 
-  if (!reading) {
+  if (!reading || !dashboardSettings.alertsEnabled) {
     return alerts;
   }
 
-  if (reading.voltage < VOLTAGE_LOW_THRESHOLD) {
+  if (reading.voltage < dashboardSettings.voltageLowThreshold) {
     alerts.push(`Voltage is below threshold (${reading.voltage.toFixed(1)} V).`);
   }
 
-  if (reading.current > CURRENT_HIGH_THRESHOLD) {
+  if (reading.current > dashboardSettings.currentHighThreshold) {
     alerts.push(`Current is above threshold (${reading.current.toFixed(1)} A).`);
   }
 
-  if (reading.temperature > TEMPERATURE_HIGH_THRESHOLD) {
+  if (reading.temperature > dashboardSettings.temperatureHighThreshold) {
     alerts.push(
       `Temperature is above threshold (${reading.temperature.toFixed(1)} °C).`
     );
@@ -143,6 +158,82 @@ function parseNumericField(value, fieldName, { required = true } = {}) {
   }
 
   return numericValue;
+}
+
+function normalizeSettings(payload) {
+  return {
+    siteName: String(payload.siteName || "").trim() || dashboardSettings.siteName,
+    operatorName:
+      String(payload.operatorName || "").trim() || dashboardSettings.operatorName,
+    operatorRole:
+      String(payload.operatorRole || "").trim() || dashboardSettings.operatorRole,
+    voltageLowThreshold: parseNumericField(
+      payload.voltageLowThreshold,
+      "voltageLowThreshold"
+    ),
+    currentHighThreshold: parseNumericField(
+      payload.currentHighThreshold,
+      "currentHighThreshold"
+    ),
+    temperatureHighThreshold: parseNumericField(
+      payload.temperatureHighThreshold,
+      "temperatureHighThreshold"
+    ),
+    onlineWindowSeconds: parseNumericField(
+      payload.onlineWindowSeconds,
+      "onlineWindowSeconds"
+    ),
+    refreshIntervalMs: parseNumericField(
+      payload.refreshIntervalMs,
+      "refreshIntervalMs"
+    ),
+    alertsEnabled: Boolean(payload.alertsEnabled)
+  };
+}
+
+function publicSettings() {
+  return {
+    ...dashboardSettings,
+    mockMode: useMockMode
+  };
+}
+
+function createSession() {
+  const token = crypto.randomBytes(24).toString("hex");
+  const session = {
+    token,
+    username: AUTH_USERNAME,
+    role: "Administrator",
+    createdAt: new Date().toISOString()
+  };
+
+  sessions.set(token, session);
+  return session;
+}
+
+function extractToken(req) {
+  const authHeader = req.headers.authorization || "";
+  const [scheme, token] = authHeader.split(" ");
+
+  if (scheme !== "Bearer" || !token) {
+    return null;
+  }
+
+  return token;
+}
+
+function requireAuth(req, res, next) {
+  const token = extractToken(req);
+
+  if (!token || !sessions.has(token)) {
+    res.status(401).json({
+      error: "Authentication required."
+    });
+    return;
+  }
+
+  req.session = sessions.get(token);
+  next();
 }
 
 async function fetchDashboardPayload() {
@@ -188,10 +279,11 @@ async function fetchDashboardPayload() {
         temperature: records.map((record) => record.temperature)
       },
       thresholds: {
-        voltageLow: VOLTAGE_LOW_THRESHOLD,
-        currentHigh: CURRENT_HIGH_THRESHOLD,
-        temperatureHigh: TEMPERATURE_HIGH_THRESHOLD
+        voltageLow: dashboardSettings.voltageLowThreshold,
+        currentHigh: dashboardSettings.currentHighThreshold,
+        temperatureHigh: dashboardSettings.temperatureHighThreshold
       },
+      settings: publicSettings(),
       updatedAt: now,
       mockMode: true
     };
@@ -220,7 +312,7 @@ async function fetchDashboardPayload() {
   const isOnline =
     latestReading &&
     (now.getTime() - new Date(latestReading.createdAt).getTime()) / 1000 <=
-      ONLINE_WINDOW_SECONDS;
+      dashboardSettings.onlineWindowSeconds;
 
   const efficiency =
     latestReading && latestReading.inputPower && latestReading.inputPower > 0
@@ -259,13 +351,78 @@ async function fetchDashboardPayload() {
       temperature: chartSeries.map((record) => record.temperature)
     },
     thresholds: {
-      voltageLow: VOLTAGE_LOW_THRESHOLD,
-      currentHigh: CURRENT_HIGH_THRESHOLD,
-      temperatureHigh: TEMPERATURE_HIGH_THRESHOLD
+      voltageLow: dashboardSettings.voltageLowThreshold,
+      currentHigh: dashboardSettings.currentHighThreshold,
+      temperatureHigh: dashboardSettings.temperatureHighThreshold
     },
+    settings: publicSettings(),
     updatedAt: now
   };
 }
+
+app.post("/api/auth/login", (req, res) => {
+  const { username, password } = req.body || {};
+
+  if (username !== AUTH_USERNAME || password !== AUTH_PASSWORD) {
+    res.status(401).json({
+      error: "Invalid username or password."
+    });
+    return;
+  }
+
+  const session = createSession();
+  res.json({
+    token: session.token,
+    user: {
+      username: session.username,
+      role: session.role
+    }
+  });
+});
+
+app.get("/api/auth/session", (req, res) => {
+  const token = extractToken(req);
+  const session = token ? sessions.get(token) : null;
+
+  if (!session) {
+    res.json({
+      authenticated: false
+    });
+    return;
+  }
+
+  res.json({
+    authenticated: true,
+    user: {
+      username: session.username,
+      role: session.role
+    }
+  });
+});
+
+app.post("/api/auth/logout", requireAuth, (req, res) => {
+  sessions.delete(req.session.token);
+  res.json({
+    success: true
+  });
+});
+
+app.get("/api/settings", (req, res) => {
+  res.json(publicSettings());
+});
+
+app.put("/api/settings", (req, res) => {
+  try {
+    const updatedSettings = normalizeSettings(req.body || {});
+    Object.assign(dashboardSettings, updatedSettings);
+    res.json(publicSettings());
+  } catch (error) {
+    res.status(400).json({
+      error: "Invalid settings payload.",
+      details: error.message
+    });
+  }
+});
 
 app.get("/api/dashboard", async (req, res) => {
   try {

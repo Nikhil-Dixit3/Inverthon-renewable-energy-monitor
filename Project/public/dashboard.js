@@ -1,5 +1,5 @@
-const REFRESH_INTERVAL_MS = 4000;
 const DEGREE_C = "\u00B0C";
+const DEFAULT_REFRESH_INTERVAL_MS = 4000;
 
 const DEMO_DATA = {
   metrics: {
@@ -43,6 +43,17 @@ const DEMO_DATA = {
     temperature: Array.from({ length: 30 }, (_, index) => 34 + Math.sin(index / 6) * 4)
   },
   updatedAt: new Date().toISOString(),
+  settings: {
+    siteName: "RenewGrid",
+    operatorName: "Admin Station",
+    operatorRole: "Plant Supervisor",
+    refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+    voltageLowThreshold: 210,
+    currentHighThreshold: 15,
+    temperatureHighThreshold: 60,
+    onlineWindowSeconds: 15,
+    alertsEnabled: true
+  },
   mockMode: true
 };
 
@@ -74,7 +85,14 @@ const chartConfig = {
 };
 
 const chartInstances = {};
-let dashboardStarted = false;
+
+const state = {
+  dashboardStarted: false,
+  refreshTimerId: null,
+  refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
+  currentView: "dashboard",
+  settings: { ...DEMO_DATA.settings }
+};
 
 function createLineChart(canvasId, label, borderColor, backgroundColor) {
   const ctx = document.getElementById(canvasId).getContext("2d");
@@ -139,6 +157,79 @@ function updateChart(chart, labels, values) {
 
 function updateText(id, value) {
   document.getElementById(id).textContent = value;
+}
+
+function showMessage(id, message, tone = "muted") {
+  const element = document.getElementById(id);
+  element.textContent = message;
+  element.className = `helper-text helper-text-${tone}`;
+}
+
+async function apiFetch(url, options = {}) {
+  const headers = {
+    "Content-Type": "application/json",
+    ...(options.headers || {})
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers
+  });
+
+  let payload = null;
+
+  try {
+    payload = await response.json();
+  } catch (error) {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    const message = payload?.error || payload?.details || "Request failed.";
+    const requestError = new Error(message);
+    requestError.status = response.status;
+    throw requestError;
+  }
+
+  return payload;
+}
+
+function applySettings(settings) {
+  state.settings = {
+    ...state.settings,
+    ...settings
+  };
+
+  updateText("brandSiteName", state.settings.siteName);
+  updateText("sidebarOperatorName", state.settings.operatorName);
+  updateText("sidebarOperatorRole", state.settings.operatorRole);
+  updateText("summarySiteName", state.settings.siteName);
+  updateText("summaryRefresh", `${state.settings.refreshIntervalMs} ms`);
+  updateText(
+    "summaryAlerts",
+    state.settings.alertsEnabled ? "Enabled" : "Disabled"
+  );
+
+  document.getElementById("siteNameInput").value = state.settings.siteName;
+  document.getElementById("refreshIntervalInput").value =
+    state.settings.refreshIntervalMs;
+  document.getElementById("operatorNameInput").value =
+    state.settings.operatorName;
+  document.getElementById("operatorRoleInput").value =
+    state.settings.operatorRole;
+  document.getElementById("voltageThresholdInput").value =
+    state.settings.voltageLowThreshold;
+  document.getElementById("currentThresholdInput").value =
+    state.settings.currentHighThreshold;
+  document.getElementById("temperatureThresholdInput").value =
+    state.settings.temperatureHighThreshold;
+  document.getElementById("onlineWindowInput").value =
+    state.settings.onlineWindowSeconds;
+  document.getElementById("alertsEnabledInput").checked =
+    state.settings.alertsEnabled;
+
+  state.refreshIntervalMs = Number(state.settings.refreshIntervalMs);
+  restartAutoRefresh();
 }
 
 function renderMetrics(data) {
@@ -231,46 +322,176 @@ function renderCharts(data) {
   );
 }
 
+function updateSessionUI() {
+  updateText("sessionUserDisplay", "Open Access");
+  updateText("accountNameValue", "Open Dashboard");
+  updateText("accountRoleValue", "No login required");
+}
+
+function setActiveView(viewName) {
+  state.currentView = viewName;
+
+  document.querySelectorAll(".app-view").forEach((view) => {
+    view.classList.toggle("hidden", view.id !== `${viewName}View`);
+  });
+
+  document.querySelectorAll("[data-view]").forEach((link) => {
+    link.classList.toggle("active", link.dataset.view === viewName);
+  });
+}
+
 async function refreshDashboard() {
   try {
-    const response = await fetch("/api/dashboard");
-
-    if (!response.ok) {
-      throw new Error("Dashboard request failed.");
-    }
-
-    const data = await response.json();
+    const data = await apiFetch("/api/dashboard");
     renderMetrics(data);
     renderAlerts(data.alerts);
     renderHistory(data.history);
     renderCharts(data);
+
+    if (data.settings) {
+      applySettings(data.settings);
+    }
   } catch (error) {
     renderMetrics(DEMO_DATA);
     renderHistory(DEMO_DATA.history);
     renderCharts(DEMO_DATA);
+    applySettings(DEMO_DATA.settings);
     renderInfoBanner(
       "Preview mode: live API is unavailable, so demo data is being shown."
     );
   }
 }
 
-function startDashboard() {
-  if (dashboardStarted) {
+function restartAutoRefresh() {
+  if (!state.dashboardStarted) {
     return;
   }
 
-  dashboardStarted = true;
-  initializeCharts();
-  refreshDashboard();
-  setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+  if (state.refreshTimerId) {
+    clearInterval(state.refreshTimerId);
+  }
+
+  state.refreshTimerId = setInterval(refreshDashboard, state.refreshIntervalMs);
 }
 
-function showDashboard() {
+function startDashboard() {
+  if (state.dashboardStarted) {
+    return;
+  }
+
+  state.dashboardStarted = true;
+  initializeCharts();
+  restartAutoRefresh();
+  refreshDashboard();
+}
+
+async function loadSettings() {
+  try {
+    const settings = await apiFetch("/api/settings");
+    applySettings(settings);
+  } catch (error) {
+    applySettings(DEMO_DATA.settings);
+  }
+}
+
+async function showDashboard() {
   document.getElementById("welcomeScreen").classList.add("hidden");
   document.getElementById("dashboardApp").classList.remove("hidden");
+  setActiveView("dashboard");
+  await loadSettings();
   startDashboard();
 }
 
-document
-  .getElementById("enterDashboardButton")
-  .addEventListener("click", showDashboard);
+async function handleSettingsSubmit(event) {
+  event.preventDefault();
+
+  const payload = {
+    siteName: document.getElementById("siteNameInput").value.trim(),
+    refreshIntervalMs: Number(
+      document.getElementById("refreshIntervalInput").value
+    ),
+    operatorName: document.getElementById("operatorNameInput").value.trim(),
+    operatorRole: document.getElementById("operatorRoleInput").value.trim(),
+    voltageLowThreshold: Number(
+      document.getElementById("voltageThresholdInput").value
+    ),
+    currentHighThreshold: Number(
+      document.getElementById("currentThresholdInput").value
+    ),
+    temperatureHighThreshold: Number(
+      document.getElementById("temperatureThresholdInput").value
+    ),
+    onlineWindowSeconds: Number(
+      document.getElementById("onlineWindowInput").value
+    ),
+    alertsEnabled: document.getElementById("alertsEnabledInput").checked
+  };
+
+  try {
+    const settings = await apiFetch("/api/settings", {
+      method: "PUT",
+      body: JSON.stringify(payload)
+    });
+
+    applySettings(settings);
+    showMessage("settingsMessage", "Settings saved successfully.", "success");
+    await refreshDashboard();
+  } catch (error) {
+    showMessage("settingsMessage", error.message, "error");
+  }
+}
+
+function handleResetSettings() {
+  applySettings(state.settings);
+  showMessage("settingsMessage", "Form reset to the latest saved settings.");
+}
+
+function logout() {
+  document.getElementById("dashboardApp").classList.add("hidden");
+  document.getElementById("welcomeScreen").classList.remove("hidden");
+  setActiveView("dashboard");
+}
+
+function bindEvents() {
+  document
+    .getElementById("enterDashboardButton")
+    .addEventListener("click", showDashboard);
+
+  document
+    .querySelectorAll("[data-view]")
+    .forEach((button) =>
+      button.addEventListener("click", () => setActiveView(button.dataset.view))
+    );
+
+  document
+    .getElementById("openSettingsButton")
+    .addEventListener("click", () => setActiveView("settings"));
+
+  document
+    .getElementById("backToDashboardButton")
+    .addEventListener("click", () => setActiveView("dashboard"));
+
+  document
+    .getElementById("settingsForm")
+    .addEventListener("submit", handleSettingsSubmit);
+
+  document
+    .getElementById("resetSettingsButton")
+    .addEventListener("click", handleResetSettings);
+
+  document
+    .getElementById("topbarLogoutButton")
+    .addEventListener("click", logout);
+
+  document
+    .getElementById("settingsLogoutButton")
+    .addEventListener("click", logout);
+}
+
+function initializeApp() {
+  bindEvents();
+  applySettings(state.settings);
+  updateSessionUI();
+}
+
+initializeApp();
