@@ -1,4 +1,6 @@
 const REFRESH_INTERVAL_MS = 4000;
+const DEGREE_C = "\u00B0C";
+
 const DEMO_DATA = {
   metrics: {
     voltage: 228.9,
@@ -65,13 +67,14 @@ const chartConfig = {
   },
   temperature: {
     elementId: "temperatureChart",
-    label: "Temperature (C)",
+    label: `Temperature (${DEGREE_C})`,
     borderColor: "#ff7a6b",
     backgroundColor: "rgba(255, 122, 107, 0.16)"
   }
 };
 
 const chartInstances = {};
+let dashboardStarted = false;
 
 function createLineChart(canvasId, label, borderColor, backgroundColor) {
   const ctx = document.getElementById(canvasId).getContext("2d");
@@ -142,7 +145,7 @@ function renderMetrics(data) {
   updateText("voltageValue", `${data.metrics.voltage.toFixed(1)} V`);
   updateText("currentValue", `${data.metrics.current.toFixed(1)} A`);
   updateText("powerValue", `${data.metrics.power.toFixed(1)} W`);
-  updateText("temperatureValue", `${data.metrics.temperature.toFixed(1)} C`);
+  updateText("temperatureValue", `${data.metrics.temperature.toFixed(1)} ${DEGREE_C}`);
   updateText("systemStatusValue", data.metrics.status);
   updateText(
     "energyTodayValue",
@@ -210,7 +213,7 @@ function renderHistory(history) {
           <td>${record.voltage.toFixed(2)} V</td>
           <td>${record.current.toFixed(2)} A</td>
           <td>${record.power.toFixed(2)} W</td>
-          <td>${record.temperature.toFixed(2)} C</td>
+          <td>${record.temperature.toFixed(2)} ${DEGREE_C}</td>
         </tr>
       `
     )
@@ -251,6 +254,23 @@ async function refreshDashboard() {
   }
 }
 
-initializeCharts();
-refreshDashboard();
-setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+function startDashboard() {
+  if (dashboardStarted) {
+    return;
+  }
+
+  dashboardStarted = true;
+  initializeCharts();
+  refreshDashboard();
+  setInterval(refreshDashboard, REFRESH_INTERVAL_MS);
+}
+
+function showDashboard() {
+  document.getElementById("welcomeScreen").classList.add("hidden");
+  document.getElementById("dashboardApp").classList.remove("hidden");
+  startDashboard();
+}
+
+document
+  .getElementById("enterDashboardButton")
+  .addEventListener("click", showDashboard);

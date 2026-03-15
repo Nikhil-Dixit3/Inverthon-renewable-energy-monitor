@@ -14,7 +14,72 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
   </head>
   <body>
-    <div class="workspace">
+    <section id="welcomeScreen" class="welcome-screen">
+      <div class="welcome-overlay"></div>
+      <div class="welcome-content">
+        <p class="welcome-kicker">Future Connected</p>
+        <h1>Welcome to IOT world</h1>
+        <p class="welcome-copy">
+          Explore a connected smart-energy space powered by sensors, live data,
+          and intelligent monitoring.
+        </p>
+        <button id="enterDashboardButton" class="welcome-button" type="button">
+          Enter Dashboard
+        </button>
+      </div>
+
+      <div class="welcome-visual">
+        <div class="welcome-image-frame">
+          <div class="welcome-image" aria-hidden="true"></div>
+          <div class="welcome-tech">
+            <div class="tech-orbit">
+              <div class="tech-core"></div>
+              <span class="orbit orbit-one"></span>
+              <span class="orbit orbit-two"></span>
+              <span class="orbit orbit-three"></span>
+            </div>
+
+            <div class="tech-card tech-card-top">
+              <span class="tech-label">Node Sync</span>
+              <strong>98.4%</strong>
+              <div class="tech-bars">
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+            </div>
+
+            <div class="tech-card tech-card-side">
+              <span class="tech-label">Grid Pulse</span>
+              <strong>24 Live Sensors</strong>
+              <div class="tech-wave"></div>
+            </div>
+
+            <div class="tech-card tech-card-bottom">
+              <span class="tech-label">Smart Energy Mesh</span>
+              <div class="tech-metric-row">
+                <div>
+                  <small>Solar</small>
+                  <strong>12.8 kW</strong>
+                </div>
+                <div>
+                  <small>Storage</small>
+                  <strong>87%</strong>
+                </div>
+                <div>
+                  <small>Nodes</small>
+                  <strong>128</strong>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="dashboardApp" class="workspace hidden">
       <div class="window-frame">
         <div class="window-bar">
           <div class="window-dots">
@@ -128,7 +193,7 @@
                   <span class="metric-title">Temperature</span>
                   <span class="metric-icon metric-icon-red">C</span>
                 </div>
-                <strong id="temperatureValue" class="metric-value">0.0 C</strong>
+                <strong id="temperatureValue" class="metric-value">0.0 &deg;C</strong>
                 <span class="metric-subtext">Controller and ambient thermal reading</span>
               </article>
             </section>

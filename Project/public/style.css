@@ -35,6 +35,322 @@ body {
     linear-gradient(180deg, #f7f8fb 0%, #eceff3 100%);
 }
 
+.welcome-screen {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(320px, 1.08fr);
+  align-items: center;
+  gap: 40px;
+  min-height: 100vh;
+  padding: 48px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(57, 227, 255, 0.22), transparent 25%),
+    linear-gradient(135deg, #02060b 0%, #07131d 48%, #0b2232 100%);
+}
+
+.welcome-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(2, 6, 11, 0.94) 0%, rgba(3, 10, 17, 0.7) 44%, rgba(3, 12, 20, 0.26) 100%),
+    repeating-linear-gradient(
+      90deg,
+      rgba(126, 229, 255, 0.06) 0,
+      rgba(126, 229, 255, 0.06) 1px,
+      transparent 1px,
+      transparent 82px
+    );
+  pointer-events: none;
+}
+
+.welcome-content,
+.welcome-visual {
+  position: relative;
+  z-index: 1;
+}
+
+.welcome-content {
+  max-width: 620px;
+}
+
+.welcome-kicker {
+  margin: 0 0 14px;
+  color: #7ee8ff;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+}
+
+.welcome-screen h1 {
+  margin: 0;
+  color: #f1fcff;
+  font-size: clamp(2.8rem, 5vw, 5.5rem);
+  line-height: 0.95;
+  text-transform: uppercase;
+}
+
+.welcome-copy {
+  max-width: 520px;
+  margin: 20px 0 0;
+  color: rgba(226, 245, 255, 0.8);
+  font-size: 1.05rem;
+  line-height: 1.7;
+}
+
+.welcome-button {
+  margin-top: 30px;
+  padding: 14px 28px;
+  border: 1px solid rgba(122, 233, 255, 0.45);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #25d6ff 0%, #0d7af0 100%);
+  color: #031018;
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  box-shadow: 0 18px 44px rgba(37, 214, 255, 0.26);
+}
+
+.welcome-image-frame {
+  position: relative;
+  min-height: 560px;
+  border: 1px solid rgba(126, 232, 255, 0.16);
+  border-radius: 28px;
+  overflow: hidden;
+  background: rgba(5, 16, 25, 0.74);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.34);
+}
+
+.welcome-image {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(2, 9, 16, 0.18), rgba(2, 9, 16, 0.38)),
+    url("./assets/iot-welcome.png") center/cover no-repeat,
+    linear-gradient(135deg, #0a1622 0%, #11293d 100%);
+}
+
+.welcome-tech {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background:
+    radial-gradient(circle at 50% 40%, rgba(47, 215, 255, 0.14), transparent 22%),
+    linear-gradient(180deg, rgba(2, 10, 18, 0.06), rgba(2, 10, 18, 0.32));
+}
+
+.welcome-tech::before,
+.welcome-tech::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.welcome-tech::before {
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(94, 219, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(94, 219, 255, 0.08) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.1), #000 25%, #000 100%);
+}
+
+.welcome-tech::after {
+  inset: 12% 8%;
+  border: 1px solid rgba(126, 232, 255, 0.08);
+  border-radius: 26px;
+  box-shadow: inset 0 0 80px rgba(47, 215, 255, 0.05);
+}
+
+.tech-orbit {
+  position: absolute;
+  top: 13%;
+  left: 50%;
+  width: 280px;
+  height: 280px;
+  transform: translateX(-50%);
+  display: grid;
+  place-items: center;
+}
+
+.tech-core {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 35%, #ecfeff 0%, #72efff 30%, #1b99dc 60%, rgba(16, 53, 84, 0.4) 100%);
+  box-shadow:
+    0 0 30px rgba(76, 228, 255, 0.5),
+    0 0 90px rgba(25, 151, 217, 0.25);
+}
+
+.orbit {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(122, 233, 255, 0.22);
+  box-shadow: inset 0 0 24px rgba(122, 233, 255, 0.08);
+}
+
+.orbit-one {
+  inset: 30px;
+}
+
+.orbit-two {
+  inset: 0;
+}
+
+.orbit-three {
+  inset: 56px;
+  border-style: dashed;
+  animation: spin 16s linear infinite;
+}
+
+.tech-card {
+  position: absolute;
+  padding: 16px 18px;
+  border: 1px solid rgba(126, 232, 255, 0.14);
+  border-radius: 18px;
+  background: rgba(3, 15, 25, 0.72);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 14px 40px rgba(0, 0, 0, 0.18);
+  color: #ebfcff;
+}
+
+.tech-card strong,
+.tech-card small,
+.tech-label {
+  display: block;
+}
+
+.tech-label {
+  margin-bottom: 8px;
+  color: #79e9ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.tech-card-top {
+  top: 12%;
+  right: 8%;
+  width: 180px;
+}
+
+.tech-card-top strong,
+.tech-card-side strong,
+.tech-card-bottom strong {
+  font-family: "Orbitron", sans-serif;
+  font-size: 1.05rem;
+}
+
+.tech-bars {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  height: 48px;
+  margin-top: 14px;
+}
+
+.tech-bars span {
+  flex: 1;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #70eeff 0%, #0a79eb 100%);
+  box-shadow: 0 0 18px rgba(76, 228, 255, 0.22);
+}
+
+.tech-bars span:nth-child(1) { height: 34%; }
+.tech-bars span:nth-child(2) { height: 78%; }
+.tech-bars span:nth-child(3) { height: 58%; }
+.tech-bars span:nth-child(4) { height: 92%; }
+.tech-bars span:nth-child(5) { height: 64%; }
+
+.tech-card-side {
+  top: 46%;
+  left: 7%;
+  width: 210px;
+}
+
+.tech-wave {
+  height: 48px;
+  margin-top: 14px;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 10% 50%, rgba(126, 232, 255, 0.9) 0 3px, transparent 4px),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(126, 232, 255, 0.22) 16%,
+      transparent 32%,
+      rgba(126, 232, 255, 0.32) 48%,
+      transparent 64%,
+      rgba(126, 232, 255, 0.22) 80%,
+      transparent 100%
+    ),
+    linear-gradient(180deg, rgba(126, 232, 255, 0.08), rgba(126, 232, 255, 0.02));
+  border: 1px solid rgba(126, 232, 255, 0.08);
+}
+
+.tech-card-bottom {
+  right: 6%;
+  bottom: 9%;
+  left: 6%;
+}
+
+.tech-metric-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.tech-metric-row div {
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(8, 28, 44, 0.72);
+  border: 1px solid rgba(126, 232, 255, 0.08);
+}
+
+.tech-metric-row small {
+  color: rgba(226, 245, 255, 0.68);
+  font-size: 0.74rem;
+  margin-bottom: 6px;
+}
+
+.welcome-image-frame::before,
+.welcome-image-frame::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.welcome-image-frame::before {
+  inset: 18px;
+  border: 1px solid rgba(126, 232, 255, 0.18);
+  border-radius: 20px;
+}
+
+.welcome-image-frame::after {
+  inset: auto 22px 22px 22px;
+  height: 110px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, rgba(2, 10, 18, 0), rgba(2, 10, 18, 0.84));
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .workspace {
   padding: 28px;
 }
@@ -539,6 +855,10 @@ th {
 }
 
 @media (max-width: 1200px) {
+  .welcome-screen {
+    grid-template-columns: 1fr;
+  }
+
   .content-grid,
   .hero-chart-grid,
   .secondary-chart-grid {
@@ -551,6 +871,24 @@ th {
 }
 
 @media (max-width: 920px) {
+  .welcome-screen {
+    padding: 28px 18px;
+  }
+
+  .welcome-image-frame {
+    min-height: 380px;
+  }
+
+  .tech-orbit {
+    width: 220px;
+    height: 220px;
+  }
+
+  .tech-card-top,
+  .tech-card-side {
+    width: 170px;
+  }
+
   .app-shell {
     grid-template-columns: 1fr;
   }
@@ -567,6 +905,49 @@ th {
 }
 
 @media (max-width: 640px) {
+  .welcome-screen h1 {
+    font-size: 2.45rem;
+  }
+
+  .welcome-copy {
+    font-size: 0.95rem;
+  }
+
+  .welcome-button {
+    width: 100%;
+  }
+
+  .welcome-tech {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 20px 16px 150px;
+  }
+
+  .tech-orbit {
+    top: 20px;
+    width: 180px;
+    height: 180px;
+    transform: translateX(-50%) scale(0.9);
+  }
+
+  .tech-card-top,
+  .tech-card-side {
+    position: static;
+    width: auto;
+  }
+
+  .tech-card-bottom {
+    right: 16px;
+    left: 16px;
+    bottom: 16px;
+  }
+
+  .tech-metric-row {
+    grid-template-columns: 1fr;
+  }
+
   .workspace {
     padding: 12px;
   }

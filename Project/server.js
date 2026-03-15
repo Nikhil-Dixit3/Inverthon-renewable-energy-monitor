@@ -127,6 +127,24 @@ function formatReading(reading) {
   };
 }
 
+function parseNumericField(value, fieldName, { required = true } = {}) {
+  if (value === undefined || value === null || value === "") {
+    if (required) {
+      throw new Error(`${fieldName} is required.`);
+    }
+
+    return null;
+  }
+
+  const numericValue = Number(value);
+
+  if (!Number.isFinite(numericValue)) {
+    throw new Error(`${fieldName} must be a valid number.`);
+  }
+
+  return numericValue;
+}
+
 async function fetchDashboardPayload() {
   if (useMockMode) {
     const records = mockReadings.length ? mockReadings : buildMockReadings();
@@ -265,14 +283,19 @@ app.get("/api/dashboard", async (req, res) => {
 app.post("/api/readings", async (req, res) => {
   try {
     const { voltage, current, power, temperature, inputPower } = req.body;
+    const normalizedReading = {
+      voltage: parseNumericField(voltage, "voltage"),
+      current: parseNumericField(current, "current"),
+      power: parseNumericField(power, "power"),
+      temperature: parseNumericField(temperature, "temperature"),
+      inputPower: parseNumericField(inputPower, "inputPower", {
+        required: false
+      })
+    };
 
     if (useMockMode) {
       const reading = {
-        voltage,
-        current,
-        power,
-        temperature,
-        inputPower: inputPower ?? null,
+        ...normalizedReading,
         createdAt: new Date()
       };
       mockReadings.push(reading);
@@ -285,13 +308,7 @@ app.post("/api/readings", async (req, res) => {
       return;
     }
 
-    const reading = await SensorReading.create({
-      voltage,
-      current,
-      power,
-      temperature,
-      inputPower
-    });
+    const reading = await SensorReading.create(normalizedReading);
 
     res.status(201).json({
       message: "Reading stored successfully.",
