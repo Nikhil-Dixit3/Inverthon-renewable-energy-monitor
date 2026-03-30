@@ -1,103 +1,118 @@
-const DEGREE_C = "\u00B0C";
-const DEFAULT_REFRESH_INTERVAL_MS = 4000;
+// Frontend controller for polling APIs, rendering live charts, and handling dashboard actions.
+const POLL_INTERVAL_MS = 4000;
+const CHART_LIMIT = 30;
 
-const DEMO_DATA = {
-  metrics: {
-    voltage: 228.9,
-    current: 9.1,
-    power: 1701.3,
-    temperature: 30.0,
-    status: "Online"
-  },
-  analytics: {
-    totalEnergyTodayWh: 703.73,
-    monthlyEnergyKWh: 0.7,
-    efficiency: 87.72
-  },
-  alerts: [],
-  history: Array.from({ length: 20 }, (_, index) => {
-    const time = new Date(Date.now() - index * 60000);
-    return {
-      time,
-      voltage: 224 + Math.sin(index / 4) * 6,
-      current: 8 + Math.cos(index / 5) * 1.2,
-      power: (224 + Math.sin(index / 4) * 6) * (8 + Math.cos(index / 5) * 1.2) * 0.82,
-      temperature: 34 + Math.sin(index / 6) * 4
-    };
-  }),
-  charts: {
-    labels: Array.from({ length: 30 }, (_, index) =>
-      new Date(Date.now() - (29 - index) * 60000).toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit"
-      })
-    ),
-    voltage: Array.from({ length: 30 }, (_, index) => 224 + Math.sin(index / 4) * 6),
-    current: Array.from({ length: 30 }, (_, index) => 8 + Math.cos(index / 5) * 1.2),
-    power: Array.from({ length: 30 }, (_, index) => {
-      const voltage = 224 + Math.sin(index / 4) * 6;
-      const current = 8 + Math.cos(index / 5) * 1.2;
-      return voltage * current * 0.82;
-    }),
-    temperature: Array.from({ length: 30 }, (_, index) => 34 + Math.sin(index / 6) * 4)
-  },
-  updatedAt: new Date().toISOString(),
-  settings: {
-    siteName: "RenewGrid",
-    operatorName: "Admin Station",
-    operatorRole: "Plant Supervisor",
-    refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-    voltageLowThreshold: 210,
-    currentHighThreshold: 15,
-    temperatureHighThreshold: 60,
-    onlineWindowSeconds: 15,
-    alertsEnabled: true
-  },
-  mockMode: true
+const appState = {
+  chartInstances: {},
+  historyRecords: []
 };
 
-const chartConfig = {
-  voltage: {
-    elementId: "voltageChart",
-    label: "Voltage (V)",
-    borderColor: "#2bb4ff",
-    backgroundColor: "rgba(43, 180, 255, 0.16)"
-  },
-  current: {
-    elementId: "currentChart",
-    label: "Current (A)",
-    borderColor: "#59e3a7",
-    backgroundColor: "rgba(89, 227, 167, 0.16)"
-  },
-  power: {
-    elementId: "powerChart",
-    label: "Power (W)",
-    borderColor: "#f4c95d",
-    backgroundColor: "rgba(244, 201, 93, 0.16)"
-  },
-  temperature: {
-    elementId: "temperatureChart",
-    label: `Temperature (${DEGREE_C})`,
-    borderColor: "#ff7a6b",
-    backgroundColor: "rgba(255, 122, 107, 0.16)"
+const elements = {
+  loadingOverlay: document.getElementById("loadingOverlay"),
+  alertBanner: document.getElementById("alertBanner"),
+  actionMessage: document.getElementById("actionMessage"),
+  statusBadge: document.getElementById("statusBadge"),
+  statusDot: document.getElementById("liveStatusDot"),
+  systemStatusText: document.getElementById("systemStatusText"),
+  lastUpdatedText: document.getElementById("lastUpdatedText"),
+  voltageValue: document.getElementById("voltageValue"),
+  currentValue: document.getElementById("currentValue"),
+  powerValue: document.getElementById("powerValue"),
+  temperatureValue: document.getElementById("temperatureValue"),
+  energyTodayValue: document.getElementById("energyTodayValue"),
+  monthlyEnergyValue: document.getElementById("monthlyEnergyValue"),
+  efficiencyValue: document.getElementById("efficiencyValue"),
+  samplesTodayValue: document.getElementById("samplesTodayValue"),
+  samplesMonthValue: document.getElementById("samplesMonthValue"),
+  voltageThresholdValue: document.getElementById("voltageThresholdValue"),
+  currentThresholdValue: document.getElementById("currentThresholdValue"),
+  temperatureThresholdValue: document.getElementById("temperatureThresholdValue"),
+  onlineWindowValue: document.getElementById("onlineWindowValue"),
+  recordCountText: document.getElementById("recordCountText"),
+  historyTableBody: document.getElementById("historyTableBody"),
+  simulateButton: document.getElementById("simulateButton"),
+  refreshButton: document.getElementById("refreshButton"),
+  exportButton: document.getElementById("exportButton"),
+  projectYear: document.getElementById("projectYear")
+};
+
+function setLoadingState(isLoading) {
+  elements.loadingOverlay.classList.toggle("hidden", !isLoading);
+}
+
+function setActionMessage(message, tone = "default") {
+  elements.actionMessage.textContent = message;
+  elements.actionMessage.className = "action-message";
+
+  if (tone !== "default") {
+    elements.actionMessage.classList.add(tone);
   }
-};
+}
 
-const chartInstances = {};
+function formatMetric(value, unit) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return `0.00 ${unit}`;
+  }
 
-const state = {
-  dashboardStarted: false,
-  refreshTimerId: null,
-  refreshIntervalMs: DEFAULT_REFRESH_INTERVAL_MS,
-  currentView: "dashboard",
-  settings: { ...DEMO_DATA.settings }
-};
+  return `${Number(value).toFixed(2)} ${unit}`;
+}
 
-function createLineChart(canvasId, label, borderColor, backgroundColor) {
-  const ctx = document.getElementById(canvasId).getContext("2d");
+function formatEnergy(value, unit) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return `0.00 ${unit}`;
+  }
 
-  return new Chart(ctx, {
+  return `${Number(value).toFixed(2)} ${unit}`;
+}
+
+function formatTimestamp(timestamp) {
+  if (!timestamp) {
+    return "Waiting for data...";
+  }
+
+  return new Date(timestamp).toLocaleString("en-IN", {
+    dateStyle: "medium",
+    timeStyle: "medium"
+  });
+}
+
+function formatTimeOnly(timestamp) {
+  if (!timestamp) {
+    return "--";
+  }
+
+  return new Date(timestamp).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+function setSystemStatus(status) {
+  const normalizedStatus = status === "Online" ? "Online" : "Offline";
+  const stateClass = normalizedStatus.toLowerCase();
+
+  elements.systemStatusText.textContent = normalizedStatus;
+  elements.statusBadge.textContent = normalizedStatus;
+  elements.statusBadge.className = `status-badge ${stateClass}`;
+  elements.statusDot.className = `status-dot ${stateClass}`;
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(payload.details || payload.error || "Request failed.");
+  }
+
+  return payload;
+}
+
+function createLineChart(canvasId, label, color) {
+  const context = document.getElementById(canvasId);
+
+  return new Chart(context, {
     type: "line",
     data: {
       labels: [],
@@ -105,33 +120,45 @@ function createLineChart(canvasId, label, borderColor, backgroundColor) {
         {
           label,
           data: [],
-          borderColor,
-          backgroundColor,
-          fill: true,
+          borderColor: color,
+          backgroundColor: `${color}22`,
+          pointRadius: 2,
+          pointHoverRadius: 4,
           tension: 0.35,
-          borderWidth: 2,
-          pointRadius: 2
+          fill: true,
+          borderWidth: 2
         }
       ]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      interaction: {
+        intersect: false,
+        mode: "index"
+      },
       plugins: {
         legend: {
-          labels: {
-            color: "#edf6ff"
-          }
+          display: false
         }
       },
       scales: {
         x: {
-          ticks: { color: "#92a8c1" },
-          grid: { color: "rgba(146, 168, 193, 0.1)" }
+          grid: {
+            color: "rgba(151, 171, 194, 0.08)"
+          },
+          ticks: {
+            color: "#97abc2",
+            maxRotation: 0
+          }
         },
         y: {
-          ticks: { color: "#92a8c1" },
-          grid: { color: "rgba(146, 168, 193, 0.1)" }
+          grid: {
+            color: "rgba(151, 171, 194, 0.08)"
+          },
+          ticks: {
+            color: "#97abc2"
+          }
         }
       }
     }
@@ -139,359 +166,247 @@ function createLineChart(canvasId, label, borderColor, backgroundColor) {
 }
 
 function initializeCharts() {
-  Object.entries(chartConfig).forEach(([key, config]) => {
-    chartInstances[key] = createLineChart(
-      config.elementId,
-      config.label,
-      config.borderColor,
-      config.backgroundColor
-    );
-  });
+  appState.chartInstances.voltage = createLineChart(
+    "voltageChart",
+    "Voltage",
+    "#5eead4"
+  );
+  appState.chartInstances.current = createLineChart(
+    "currentChart",
+    "Current",
+    "#38bdf8"
+  );
+  appState.chartInstances.power = createLineChart(
+    "powerChart",
+    "Power",
+    "#fbbf24"
+  );
+  appState.chartInstances.temperature = createLineChart(
+    "temperatureChart",
+    "Temperature",
+    "#fb7185"
+  );
 }
 
-function updateChart(chart, labels, values) {
-  chart.data.labels = labels;
-  chart.data.datasets[0].data = values;
-  chart.update();
-}
-
-function updateText(id, value) {
-  document.getElementById(id).textContent = value;
-}
-
-function showMessage(id, message, tone = "muted") {
-  const element = document.getElementById(id);
-  element.textContent = message;
-  element.className = `helper-text helper-text-${tone}`;
-}
-
-async function apiFetch(url, options = {}) {
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {})
-  };
-
-  const response = await fetch(url, {
-    ...options,
-    headers
-  });
-
-  let payload = null;
-
-  try {
-    payload = await response.json();
-  } catch (error) {
-    payload = null;
+function updateCharts(records) {
+  if (!appState.chartInstances.voltage) {
+    return;
   }
 
-  if (!response.ok) {
-    const message = payload?.error || payload?.details || "Request failed.";
-    const requestError = new Error(message);
-    requestError.status = response.status;
-    throw requestError;
-  }
+  const labels = records.map((record) => formatTimeOnly(record.timestamp));
 
-  return payload;
+  appState.chartInstances.voltage.data.labels = labels;
+  appState.chartInstances.voltage.data.datasets[0].data = records.map(
+    (record) => record.voltage
+  );
+
+  appState.chartInstances.current.data.labels = labels;
+  appState.chartInstances.current.data.datasets[0].data = records.map(
+    (record) => record.current
+  );
+
+  appState.chartInstances.power.data.labels = labels;
+  appState.chartInstances.power.data.datasets[0].data = records.map(
+    (record) => record.power
+  );
+
+  appState.chartInstances.temperature.data.labels = labels;
+  appState.chartInstances.temperature.data.datasets[0].data = records.map(
+    (record) => record.temperature
+  );
+
+  Object.values(appState.chartInstances).forEach((chart) => chart.update());
 }
 
-function applySettings(settings) {
-  state.settings = {
-    ...state.settings,
-    ...settings
-  };
-
-  updateText("brandSiteName", state.settings.siteName);
-  updateText("sidebarOperatorName", state.settings.operatorName);
-  updateText("sidebarOperatorRole", state.settings.operatorRole);
-  updateText("summarySiteName", state.settings.siteName);
-  updateText("summaryRefresh", `${state.settings.refreshIntervalMs} ms`);
-  updateText(
-    "summaryAlerts",
-    state.settings.alertsEnabled ? "Enabled" : "Disabled"
+function updateMetrics(latestRecord) {
+  elements.voltageValue.textContent = formatMetric(latestRecord?.voltage, "V");
+  elements.currentValue.textContent = formatMetric(latestRecord?.current, "A");
+  elements.powerValue.textContent = formatMetric(latestRecord?.power, "W");
+  elements.temperatureValue.textContent = formatMetric(
+    latestRecord?.temperature,
+    "C"
   );
-
-  document.getElementById("siteNameInput").value = state.settings.siteName;
-  document.getElementById("refreshIntervalInput").value =
-    state.settings.refreshIntervalMs;
-  document.getElementById("operatorNameInput").value =
-    state.settings.operatorName;
-  document.getElementById("operatorRoleInput").value =
-    state.settings.operatorRole;
-  document.getElementById("voltageThresholdInput").value =
-    state.settings.voltageLowThreshold;
-  document.getElementById("currentThresholdInput").value =
-    state.settings.currentHighThreshold;
-  document.getElementById("temperatureThresholdInput").value =
-    state.settings.temperatureHighThreshold;
-  document.getElementById("onlineWindowInput").value =
-    state.settings.onlineWindowSeconds;
-  document.getElementById("alertsEnabledInput").checked =
-    state.settings.alertsEnabled;
-
-  state.refreshIntervalMs = Number(state.settings.refreshIntervalMs);
-  restartAutoRefresh();
 }
 
-function renderMetrics(data) {
-  updateText("voltageValue", `${data.metrics.voltage.toFixed(1)} V`);
-  updateText("currentValue", `${data.metrics.current.toFixed(1)} A`);
-  updateText("powerValue", `${data.metrics.power.toFixed(1)} W`);
-  updateText("temperatureValue", `${data.metrics.temperature.toFixed(1)} ${DEGREE_C}`);
-  updateText("systemStatusValue", data.metrics.status);
-  updateText(
-    "energyTodayValue",
-    `${data.analytics.totalEnergyTodayWh.toFixed(2)} Wh`
+function updateAnalytics(stats) {
+  elements.energyTodayValue.textContent = formatEnergy(
+    stats.analytics.energyTodayWh,
+    "Wh"
   );
-  updateText(
-    "energyMonthValue",
-    `${data.analytics.monthlyEnergyKWh.toFixed(2)} kWh`
+  elements.monthlyEnergyValue.textContent = formatEnergy(
+    stats.analytics.monthlyEnergyKWh,
+    "kWh"
   );
-  updateText(
-    "efficiencyValue",
-    data.analytics.efficiency === null
+  elements.efficiencyValue.textContent =
+    stats.analytics.efficiency === null
       ? "--"
-      : `${data.analytics.efficiency.toFixed(2)}%`
-  );
-  updateText(
-    "lastUpdated",
-    new Date(data.updatedAt).toLocaleString("en-IN", {
-      dateStyle: "medium",
-      timeStyle: "medium"
-    })
+      : `${Number(stats.analytics.efficiency).toFixed(2)} %`;
+  elements.samplesTodayValue.textContent = String(stats.analytics.samplesToday);
+  elements.samplesMonthValue.textContent = String(
+    stats.analytics.samplesThisMonth
   );
 
-  const statusBadge = document.getElementById("systemStatusBadge");
-  statusBadge.textContent = data.metrics.status;
-  statusBadge.className =
-    data.metrics.status === "Online"
-      ? "status-pill status-online"
-      : "status-pill status-offline";
+  elements.voltageThresholdValue.textContent = `${stats.thresholds.voltageLow.toFixed(
+    1
+  )} V`;
+  elements.currentThresholdValue.textContent = `${stats.thresholds.currentHigh.toFixed(
+    1
+  )} A`;
+  elements.temperatureThresholdValue.textContent = `${stats.thresholds.temperatureHigh.toFixed(
+    1
+  )} C`;
+  elements.onlineWindowValue.textContent = `${stats.onlineWindowSeconds} sec`;
 }
 
-function renderAlerts(alerts) {
-  const alertBanner = document.getElementById("alertBanner");
-
+function updateAlerts(alerts) {
   if (!alerts.length) {
-    alertBanner.classList.add("hidden");
-    alertBanner.textContent = "";
+    elements.alertBanner.classList.add("hidden");
+    elements.alertBanner.textContent = "";
     return;
   }
 
-  alertBanner.classList.remove("hidden");
-  alertBanner.textContent = alerts.join(" ");
+  elements.alertBanner.classList.remove("hidden");
+  elements.alertBanner.textContent = `Warning: ${alerts.join(" ")}`;
 }
 
-function renderInfoBanner(message) {
-  const alertBanner = document.getElementById("alertBanner");
-  alertBanner.classList.remove("hidden");
-  alertBanner.textContent = message;
-}
+function updateHistoryTable(records) {
+  const historyRows = [...records].slice(-20).reverse();
+  appState.historyRecords = historyRows;
+  elements.recordCountText.textContent = `${historyRows.length} records loaded`;
 
-function renderHistory(history) {
-  const tableBody = document.getElementById("historyTableBody");
-
-  if (!history.length) {
-    tableBody.innerHTML =
-      '<tr><td colspan="5" class="empty-state">No records available yet.</td></tr>';
+  if (!historyRows.length) {
+    elements.historyTableBody.innerHTML = `
+      <tr>
+        <td colspan="5" class="empty-state">
+          No readings available yet. Start sending ESP32 data or simulate one sample.
+        </td>
+      </tr>
+    `;
     return;
   }
 
-  tableBody.innerHTML = history
+  elements.historyTableBody.innerHTML = historyRows
     .map(
       (record) => `
         <tr>
-          <td>${new Date(record.time).toLocaleString("en-IN")}</td>
-          <td>${record.voltage.toFixed(2)} V</td>
-          <td>${record.current.toFixed(2)} A</td>
-          <td>${record.power.toFixed(2)} W</td>
-          <td>${record.temperature.toFixed(2)} ${DEGREE_C}</td>
+          <td>${formatTimestamp(record.timestamp)}</td>
+          <td>${Number(record.voltage).toFixed(2)}</td>
+          <td>${Number(record.current).toFixed(2)}</td>
+          <td>${Number(record.power).toFixed(2)}</td>
+          <td>${Number(record.temperature).toFixed(2)}</td>
         </tr>
       `
     )
     .join("");
 }
 
-function renderCharts(data) {
-  updateChart(chartInstances.voltage, data.charts.labels, data.charts.voltage);
-  updateChart(chartInstances.current, data.charts.labels, data.charts.current);
-  updateChart(chartInstances.power, data.charts.labels, data.charts.power);
-  updateChart(
-    chartInstances.temperature,
-    data.charts.labels,
-    data.charts.temperature
-  );
+function renderDashboard(records, stats) {
+  const latestRecord = stats.latest || records[records.length - 1] || null;
+
+  updateMetrics(latestRecord);
+  updateAnalytics(stats);
+  updateAlerts(stats.alerts || []);
+  updateHistoryTable(records);
+  updateCharts(records);
+  setSystemStatus(stats.systemStatus);
+  elements.lastUpdatedText.textContent = formatTimestamp(stats.lastSeenAt);
 }
 
-function updateSessionUI() {
-  updateText("sessionUserDisplay", "Open Access");
-  updateText("accountNameValue", "Open Dashboard");
-  updateText("accountRoleValue", "No login required");
-}
+async function refreshDashboard(showLoader = false) {
+  if (showLoader) {
+    setLoadingState(true);
+  }
 
-function setActiveView(viewName) {
-  state.currentView = viewName;
-
-  document.querySelectorAll(".app-view").forEach((view) => {
-    view.classList.toggle("hidden", view.id !== `${viewName}View`);
-  });
-
-  document.querySelectorAll("[data-view]").forEach((link) => {
-    link.classList.toggle("active", link.dataset.view === viewName);
-  });
-}
-
-async function refreshDashboard() {
   try {
-    const data = await apiFetch("/api/dashboard");
-    renderMetrics(data);
-    renderAlerts(data.alerts);
-    renderHistory(data.history);
-    renderCharts(data);
+    const [dataPayload, statsPayload] = await Promise.all([
+      fetchJson(`/api/data?limit=${CHART_LIMIT}&order=asc`),
+      fetchJson("/api/stats")
+    ]);
 
-    if (data.settings) {
-      applySettings(data.settings);
-    }
-  } catch (error) {
-    renderMetrics(DEMO_DATA);
-    renderHistory(DEMO_DATA.history);
-    renderCharts(DEMO_DATA);
-    applySettings(DEMO_DATA.settings);
-    renderInfoBanner(
-      "Preview mode: live API is unavailable, so demo data is being shown."
+    renderDashboard(dataPayload.data || [], statsPayload);
+    setActionMessage(
+      typeof Chart === "undefined"
+        ? "Live data synced, but Chart.js is unavailable so graphs are hidden."
+        : "Live data synced successfully.",
+      typeof Chart === "undefined" ? "error" : "success"
     );
-  }
-}
-
-function restartAutoRefresh() {
-  if (!state.dashboardStarted) {
-    return;
-  }
-
-  if (state.refreshTimerId) {
-    clearInterval(state.refreshTimerId);
-  }
-
-  state.refreshTimerId = setInterval(refreshDashboard, state.refreshIntervalMs);
-}
-
-function startDashboard() {
-  if (state.dashboardStarted) {
-    return;
-  }
-
-  state.dashboardStarted = true;
-  initializeCharts();
-  restartAutoRefresh();
-  refreshDashboard();
-}
-
-async function loadSettings() {
-  try {
-    const settings = await apiFetch("/api/settings");
-    applySettings(settings);
   } catch (error) {
-    applySettings(DEMO_DATA.settings);
+    setSystemStatus("Offline");
+    setActionMessage(error.message, "error");
+  } finally {
+    setLoadingState(false);
   }
 }
 
-async function showDashboard() {
-  document.getElementById("welcomeScreen").classList.add("hidden");
-  document.getElementById("dashboardApp").classList.remove("hidden");
-  setActiveView("dashboard");
-  await loadSettings();
-  startDashboard();
+function exportHistoryToCsv() {
+  if (!appState.historyRecords.length) {
+    setActionMessage("No history records available to export yet.", "error");
+    return;
+  }
+
+  const headers = ["Time", "Voltage (V)", "Current (A)", "Power (W)", "Temperature (C)"];
+  const rows = appState.historyRecords.map((record) => [
+    formatTimestamp(record.timestamp),
+    record.voltage,
+    record.current,
+    record.power,
+    record.temperature
+  ]);
+  const csvContent = [headers, ...rows]
+    .map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const downloadUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+
+  anchor.href = downloadUrl;
+  anchor.download = `renewable-energy-history-${new Date()
+    .toISOString()
+    .slice(0, 10)}.csv`;
+  anchor.click();
+  URL.revokeObjectURL(downloadUrl);
+  setActionMessage("CSV export downloaded successfully.", "success");
 }
 
-async function handleSettingsSubmit(event) {
-  event.preventDefault();
-
-  const payload = {
-    siteName: document.getElementById("siteNameInput").value.trim(),
-    refreshIntervalMs: Number(
-      document.getElementById("refreshIntervalInput").value
-    ),
-    operatorName: document.getElementById("operatorNameInput").value.trim(),
-    operatorRole: document.getElementById("operatorRoleInput").value.trim(),
-    voltageLowThreshold: Number(
-      document.getElementById("voltageThresholdInput").value
-    ),
-    currentHighThreshold: Number(
-      document.getElementById("currentThresholdInput").value
-    ),
-    temperatureHighThreshold: Number(
-      document.getElementById("temperatureThresholdInput").value
-    ),
-    onlineWindowSeconds: Number(
-      document.getElementById("onlineWindowInput").value
-    ),
-    alertsEnabled: document.getElementById("alertsEnabledInput").checked
-  };
+async function simulateReading() {
+  elements.simulateButton.disabled = true;
 
   try {
-    const settings = await apiFetch("/api/settings", {
-      method: "PUT",
-      body: JSON.stringify(payload)
+    await fetchJson("/api/simulate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ count: 1 })
     });
 
-    applySettings(settings);
-    showMessage("settingsMessage", "Settings saved successfully.", "success");
+    setActionMessage("Sample ESP32 reading generated successfully.", "success");
     await refreshDashboard();
   } catch (error) {
-    showMessage("settingsMessage", error.message, "error");
+    setActionMessage(error.message, "error");
+  } finally {
+    elements.simulateButton.disabled = false;
   }
 }
 
-function handleResetSettings() {
-  applySettings(state.settings);
-  showMessage("settingsMessage", "Form reset to the latest saved settings.");
-}
-
-function logout() {
-  document.getElementById("dashboardApp").classList.add("hidden");
-  document.getElementById("welcomeScreen").classList.remove("hidden");
-  setActiveView("dashboard");
-}
-
-function bindEvents() {
-  document
-    .getElementById("enterDashboardButton")
-    .addEventListener("click", showDashboard);
-
-  document
-    .querySelectorAll("[data-view]")
-    .forEach((button) =>
-      button.addEventListener("click", () => setActiveView(button.dataset.view))
-    );
-
-  document
-    .getElementById("openSettingsButton")
-    .addEventListener("click", () => setActiveView("settings"));
-
-  document
-    .getElementById("backToDashboardButton")
-    .addEventListener("click", () => setActiveView("dashboard"));
-
-  document
-    .getElementById("settingsForm")
-    .addEventListener("submit", handleSettingsSubmit);
-
-  document
-    .getElementById("resetSettingsButton")
-    .addEventListener("click", handleResetSettings);
-
-  document
-    .getElementById("topbarLogoutButton")
-    .addEventListener("click", logout);
-
-  document
-    .getElementById("settingsLogoutButton")
-    .addEventListener("click", logout);
+function attachEventListeners() {
+  elements.simulateButton.addEventListener("click", simulateReading);
+  elements.exportButton.addEventListener("click", exportHistoryToCsv);
+  elements.refreshButton.addEventListener("click", () => refreshDashboard(true));
 }
 
 function initializeApp() {
-  bindEvents();
-  applySettings(state.settings);
-  updateSessionUI();
+  elements.projectYear.textContent = String(new Date().getFullYear());
+  attachEventListeners();
+
+  if (typeof Chart === "undefined") {
+    setActionMessage("Chart.js failed to load. Graphs are temporarily unavailable.", "error");
+  } else {
+    initializeCharts();
+  }
+
+  refreshDashboard(true);
+  window.setInterval(() => refreshDashboard(false), POLL_INTERVAL_MS);
 }
 
 initializeApp();
