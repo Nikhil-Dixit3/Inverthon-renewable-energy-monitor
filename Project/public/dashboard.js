@@ -2,10 +2,34 @@
 const POLL_INTERVAL_MS = 4000;
 const CHART_LIMIT = 30;
 const STATIC_PREVIEW_PORTS = new Set(["5500", "5501", "5502", "5503"]);
-const IS_STATIC_PREVIEW =
+const GITHUB_PAGES_HOST_PATTERN = /\.github\.io$/i;
+const IS_LOCAL_STATIC_PREVIEW =
   window.location.protocol === "file:" ||
   STATIC_PREVIEW_PORTS.has(window.location.port);
-const API_BASE = IS_STATIC_PREVIEW ? "http://localhost:3000/api" : "/api";
+const IS_GITHUB_PAGES = GITHUB_PAGES_HOST_PATTERN.test(window.location.hostname);
+
+function normalizeApiBase(apiBaseUrl) {
+  return apiBaseUrl.replace(/\/+$/, "");
+}
+
+function resolveApiBase() {
+  const configuredApiBaseUrl =
+    typeof window.REM_CONFIG?.apiBaseUrl === "string"
+      ? window.REM_CONFIG.apiBaseUrl.trim()
+      : "";
+
+  if (configuredApiBaseUrl) {
+    return normalizeApiBase(configuredApiBaseUrl);
+  }
+
+  if (IS_LOCAL_STATIC_PREVIEW || IS_GITHUB_PAGES) {
+    return null;
+  }
+
+  return "/api";
+}
+
+const API_BASE = resolveApiBase();
 const PREVIEW_THRESHOLDS = {
   voltageLow: 210,
   currentHigh: 15,
@@ -21,6 +45,18 @@ const SEVERITY_LABELS = {
   major: "Major",
   critical: "Critical"
 };
+
+function getPreviewFallbackMessage(defaultMessage) {
+  if (!API_BASE && IS_GITHUB_PAGES) {
+    return "GitHub Pages preview is active. Add your hosted backend URL in config.js for live data.";
+  }
+
+  if (!API_BASE && IS_LOCAL_STATIC_PREVIEW) {
+    return "Preview mode is active. Start the Node server for live backend data.";
+  }
+
+  return defaultMessage;
+}
 
 const appState = {
   chartInstances: {},
@@ -398,8 +434,12 @@ function buildPreviewStats(records) {
   };
 }
 
-async function fetchJson(url, options = {}) {
-  const response = await fetch(url, options);
+async function fetchJson(path, options = {}) {
+  if (!API_BASE) {
+    throw new Error("No API base URL configured.");
+  }
+
+  const response = await fetch(`${API_BASE}${path}`, options);
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -775,8 +815,8 @@ async function refreshDashboard(showLoader = false) {
 
   try {
     const [dataPayload, statsPayload] = await Promise.all([
-      fetchJson(`${API_BASE}/data?limit=${CHART_LIMIT}&order=asc`),
-      fetchJson(`${API_BASE}/stats`)
+      fetchJson(`/data?limit=${CHART_LIMIT}&order=asc`),
+      fetchJson("/stats")
     ]);
 
     renderDashboard(dataPayload.data || [], statsPayload);
@@ -792,9 +832,7 @@ async function refreshDashboard(showLoader = false) {
 
     renderDashboard(previewRecords, previewStats);
     setActionMessage(
-      IS_STATIC_PREVIEW
-        ? "Preview mode is active. Start the Node server for live backend data."
-        : "Backend unavailable. Showing preview dashboard data.",
+      getPreviewFallbackMessage("Backend unavailable. Showing preview dashboard data."),
       "success"
     );
   } finally {
@@ -836,7 +874,7 @@ async function simulateReading() {
   elements.simulateButton.disabled = true;
 
   try {
-    await fetchJson(`${API_BASE}/simulate`, {
+    await fetchJson("/simulate", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -852,7 +890,9 @@ async function simulateReading() {
 
     renderDashboard(previewRecords, previewStats);
     setActionMessage(
-      "Preview reading loaded locally because the backend is unavailable.",
+      getPreviewFallbackMessage(
+        "Preview reading loaded locally because the backend is unavailable."
+      ),
       "success"
     );
   } finally {
@@ -864,7 +904,7 @@ async function simulateFault() {
   elements.simulateFaultButton.disabled = true;
 
   try {
-    await fetchJson(`${API_BASE}/simulate/fault`, {
+    await fetchJson("/simulate/fault", {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -879,7 +919,9 @@ async function simulateFault() {
 
     renderDashboard(previewRecords, previewStats);
     setActionMessage(
-      "Preview fault scenario loaded locally because the backend is unavailable.",
+      getPreviewFallbackMessage(
+        "Preview fault scenario loaded locally because the backend is unavailable."
+      ),
       "success"
     );
   } finally {
