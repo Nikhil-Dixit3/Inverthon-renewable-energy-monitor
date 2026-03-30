@@ -4,41 +4,47 @@ Full-stack IoT renewable energy monitoring web application built with Node.js, E
 
 ## Features
 
-- Modern responsive dark-theme dashboard
+- Modern dark-theme dashboard with a welcome screen
 - Live polling every 4 seconds
 - Voltage, current, power, and temperature metric cards
 - Online and offline system status indicator
-- Live Chart.js graphs for all sensor parameters
+- Live Chart.js graphs for power, voltage, current, and temperature
 - Energy analytics for daily energy, monthly energy, and efficiency
-- Alert banner for threshold violations
+- Alert banner for warning conditions
+- Fault detection panel for undervoltage, overcurrent, thermal, telemetry, and efficiency issues
 - Historical table for the latest 20 readings
 - CSV export for dashboard history
-- Simulation endpoint for demo or ESP32-free testing
+- Simulation routes for demo and ESP32-free testing
+- Preview fallback data when the backend is unavailable during static demos
 
 ## Project Structure
 
 ```text
 project/
-├── server/
-│   ├── server.js
-│   ├── models/
-│   │   └── Energy.js
-│   └── routes/
-│       └── api.js
-├── public/
-│   ├── index.html
-│   ├── style.css
-│   └── dashboard.js
-├── package.json
-└── README.md
+|-- server/
+|   |-- app.js
+|   |-- server.js
+|   |-- models/
+|   |   `-- Energy.js
+|   `-- routes/
+|       `-- api.js
+|-- public/
+|   |-- index.html
+|   |-- style.css
+|   `-- dashboard.js
+|-- tests/
+|   `-- smoke.test.js
+|-- package.json
+`-- README.md
 ```
 
 ## API Endpoints
 
 - `POST /api/data` - store a sensor reading from ESP32
 - `GET /api/data` - fetch latest readings, default limit is 20
-- `GET /api/stats` - fetch analytics, alerts, and system status
+- `GET /api/stats` - fetch analytics, alerts, faults, and system status
 - `POST /api/simulate` - insert one or more simulated readings
+- `POST /api/simulate/fault` - insert a simulated fault reading for dashboard testing
 - `GET /api/health` - confirm API and MongoDB connection state
 
 ## MongoDB Schema
@@ -78,7 +84,13 @@ $env:PORT="3000"
 npm run dev
 ```
 
-5. Open `http://localhost:3000`
+5. Run the smoke tests before publishing:
+
+```bash
+npm test
+```
+
+6. Open `http://localhost:3000`
 
 ## Sample ESP32 Payload
 
@@ -110,6 +122,14 @@ curl -X POST http://localhost:3000/api/simulate \
   -H "Content-Type: application/json" \
   -d "{\"count\":24,\"intervalMinutes\":10}"
 ```
+
+## Publish Checklist
+
+- Set a production `MONGO_URI`
+- Confirm `npm test` passes
+- Start the app with `npm start` or `npm run dev`
+- Verify `GET /api/health` returns `api: online`
+- Open the dashboard and confirm live data or preview mode is rendering correctly
 
 ## Notes
 
