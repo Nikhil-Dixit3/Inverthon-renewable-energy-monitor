@@ -946,9 +946,9 @@ function openDashboard() {
 }
 
 function showWelcomeOverview() {
-  elements.previewStatusButton.textContent = "Live IoT + Analytics + Alerts";
+  elements.previewStatusButton.textContent = "ESP32 + Inverter + Safety";
   window.setTimeout(() => {
-    elements.previewStatusButton.textContent = "View System Intro";
+    elements.previewStatusButton.textContent = "Project Highlights";
   }, 1800);
 }
 
